@@ -15,23 +15,59 @@ import {
   BarChart,
   Bar,
 } from 'recharts';
-import { Zap, TrendingUp, Calendar, BatteryFull, PlugZap, ChartLine, BarChart2, Table } from 'lucide-react';
+import { Zap, TrendingUp, Calendar, BatteryFull, PlugZap, ChartLine, BarChart2, Table, AlertCircle } from 'lucide-react';
 import StatCard from '@/components/StatCard';
 import DataTable from '@/components/DataTable';
-import { getBuiltInData, getBuiltInStats, EnergyRecord, EnergyStats } from '@/lib/energyData';
+import {
+  getDataByMonth,
+  getStatsByMonth,
+  calculateBatteryInfo,
+  getRechargeRecommendation,
+  BatteryInfo,
+  RechargeRecommendation,
+  EnergyRecord,
+  EnergyStats,
+} from '@/lib/energyData';
+import { RAW_DATA } from '@/lib/rawData';
 
 export default function Home() {
   const [records, setRecords] = useState<EnergyRecord[]>([]);
   const [stats, setStats] = useState<EnergyStats | null>(null);
+  const [batteryInfo, setBatteryInfo] = useState<BatteryInfo | null>(null);
+  const [rechargeRec, setRechargeRec] = useState<RechargeRecommendation | null>(null);
+  // 获取当前月份（1-12），并确保不超过6月
+  const currentMonth = Math.min(new Date().getMonth() + 1, 6);
+  const [selectedMonth, setSelectedMonth] = useState<number>(currentMonth); // 默认当前月份
+
+  // 月份选项
+  const months = [
+    { value: 3, label: '2026年03月' },
+    { value: 4, label: '2026年04月' },
+    { value: 5, label: '2026年05月' },
+    { value: 6, label: '2026年06月' },
+  ];
 
   useEffect(() => {
-    // 加载内置数据
-    const data = getBuiltInData();
-    const calculatedStats = getBuiltInStats();
+    // 加载指定月份的数据
+    const data = getDataByMonth(selectedMonth);
+    const calculatedStats = getStatsByMonth(2026, selectedMonth);
+
+    // 计算剩余电量
+    const battery = calculateBatteryInfo(RAW_DATA);
+    setBatteryInfo(battery);
+
+    // 获取充值推荐
+    const recommendation = getRechargeRecommendation(
+      battery,
+      calculatedStats.averageDaily,
+      new Date(),
+      2 // 充电延迟2天
+    );
+    setRechargeRec(recommendation);
 
     setRecords(data);
     setStats(calculatedStats);
-  }, []);
+  }, [selectedMonth]);
 
   if (!stats) {
     return (
@@ -142,6 +178,17 @@ export default function Home() {
               border-color: rgba(100, 116, 139, 0.4);
               box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
             }
+            
+            select {
+              background-color: rgba(15, 23, 42, 0.8);
+              border-color: rgba(100, 116, 139, 0.4);
+              color: var(--foreground);
+            }
+            
+            select option {
+              background-color: rgba(15, 23, 42, 0.8);
+              color: var(--foreground);
+            }
           }
           
           /* 响应式设计 */
@@ -188,11 +235,19 @@ export default function Home() {
           }
         `}</style>
         <div className="container">
-          <div className="flex items-center justify-center gap-3 mb-2">
+          <div className="flex items-center justify-center gap-3 mb-4">
             <Calendar className="w-6 h-6 text-blue-400" />
-            <h1 className="text-xl font-poppins font-bold text-foreground text-center">
-              2026年03月
-            </h1>
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(Number(e.target.value))}
+              className="px-4 py-2 rounded-lg border border-slate-300 bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-blue-400"
+            >
+              {months.map((month) => (
+                <option key={month.value} value={month.value}>
+                  {month.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </header>
@@ -201,9 +256,36 @@ export default function Home() {
       <div className="container py-4">
         <BatteryFull className="w-8 h-8 text-emerald-500 mx-auto" />
         <p className="text-xl text-emerald-500 font-medium text-center">
-          表内剩余：43度
+          表内剩余：{batteryInfo?.currentBalance.toFixed(2)}度
         </p>
       </div>
+
+      {/* 充值推荐 */}
+      {rechargeRec?.shouldRecharge && (
+        <div className="container py-2">
+          <div className={`glass-card p-4 rounded-xl mx-auto max-w-md ${
+            rechargeRec.urgency === 'high' ? 'border-red-400' :
+            rechargeRec.urgency === 'medium' ? 'border-yellow-400' : 'border-blue-400'
+          }`}>
+            <div className="flex items-center gap-3 mb-2">
+              <AlertCircle className={`w-6 h-6 ${
+                rechargeRec.urgency === 'high' ? 'text-red-400' :
+                rechargeRec.urgency === 'medium' ? 'text-yellow-400' : 'text-blue-400'
+              }`} />
+              <h3 className="font-semibold text-foreground">充值提醒</h3>
+            </div>
+            <p className="text-sm text-muted-foreground mb-2">
+              预计剩余电量可用 {rechargeRec.daysUntilEmpty} 天
+            </p>
+            <p className="text-sm text-foreground">
+              建议充值日期：<span className="font-semibold">{rechargeRec.recommendedDate}</span>
+            </p>
+            <p className="text-sm text-foreground">
+              推荐充值：<span className="font-semibold">{rechargeRec.recommendedAmount}度</span>（约30天用量）
+            </p>
+          </div>
+        </div>
+      )}
       {/* 主要内容 */}
       <main className="container py-12">
         {/* 统计卡片网格 */}
