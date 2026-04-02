@@ -492,7 +492,7 @@ export default function Home() {
           }
         `}</style>
         <div className="container text-center text-muted-foreground text-sm">
-          <p>数据更新：2026年03月31日</p>
+          <p>数据更新：2026年04月01日</p>
         </div>
       </footer>
     </div>
